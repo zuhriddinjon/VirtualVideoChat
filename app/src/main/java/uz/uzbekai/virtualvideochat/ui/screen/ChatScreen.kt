@@ -4,6 +4,7 @@ package uz.uzbekai.virtualvideochat.ui.screen
 
 
 import android.Manifest
+import android.util.Log
 import androidx.annotation.OptIn
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
@@ -68,6 +69,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -77,13 +79,13 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.net.toUri
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
@@ -112,6 +114,10 @@ fun ChatScreen(
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val state by viewModel.state.collectAsState()
+
+    LaunchedEffect(state) {
+        Log.d("TAGTAG", "ChatScreen: ${state}")
+    }
 
     val micPermissionState = rememberPermissionState(
         permission = Manifest.permission.RECORD_AUDIO
@@ -227,7 +233,7 @@ fun ChatScreen(
 
 @OptIn(UnstableApi::class)
 @Composable
-fun EnhancedVideoPlayer(
+private fun EnhancedVideoPlayer(
     videoType: VideoType,
     shouldLoop: Boolean,
     onVideoCompleted: (VideoType) -> Unit,
@@ -235,6 +241,9 @@ fun EnhancedVideoPlayer(
 ) {
     val context = LocalContext.current
     var isTransitioning by remember { mutableStateOf(false) }
+    val currentShouldLoop by rememberUpdatedState(newValue = shouldLoop)
+    val currentVideoType by rememberUpdatedState(newValue = videoType)
+
 
     val exoPlayer = remember {
         ExoPlayer.Builder(context)
@@ -242,20 +251,21 @@ fun EnhancedVideoPlayer(
             .apply {
                 addListener(object : Player.Listener {
                     override fun onPlaybackStateChanged(playbackState: Int) {
+                        Log.d("TAGTAG", "onPlaybackStateChanged: $playbackState, $shouldLoop")
                         when (playbackState) {
                             Player.STATE_ENDED -> {
-                                if (!shouldLoop) {
-                                    onVideoCompleted(videoType)
+                                if (!currentShouldLoop) {
+                                    onVideoCompleted(currentVideoType)
                                 }
                             }
 
-                            Player.STATE_BUFFERING -> {
-                                isTransitioning = true
-                            }
-
-                            Player.STATE_READY -> {
-                                isTransitioning = false
-                            }
+//                            Player.STATE_BUFFERING -> {
+//                                isTransitioning = true
+//                            }
+//
+//                            Player.STATE_READY -> {
+//                                isTransitioning = false
+//                            }
                         }
                     }
                 })
@@ -264,16 +274,41 @@ fun EnhancedVideoPlayer(
 
     LaunchedEffect(videoType, shouldLoop) {
         val uri = "android.resource://${context.packageName}/${videoType.resourceId}".toUri()
+//
+        exoPlayer.setMediaItem(MediaItem.fromUri(uri))
 
-        exoPlayer.apply {
-            setMediaItem(MediaItem.fromUri(uri))
-            repeatMode = if (shouldLoop) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
-            prepare()
-            playWhenReady = true
-        }
+        exoPlayer.prepare()
+        exoPlayer.play()
+//        val index = VideoType.entries.indexOf(videoType)
+//        Log.d("TAGTAG", "shouldLoop: $shouldLoop")
+//
+//        exoPlayer.apply {
+//            seekTo(index, 0)
+//            repeatMode =
+//                if (shouldLoop) Player.REPEAT_MODE_ONE
+//                else Player.REPEAT_MODE_OFF
+//            playWhenReady = true
+//        }
     }
 
     DisposableEffect(Unit) {
+//        val mediaItems = listOf(
+//            R.raw.idle,
+//            R.raw.greeting,
+//            R.raw.listening,
+//            R.raw.weather,
+//            R.raw.general_response,
+//            R.raw.goodbye,
+//            R.raw.fallback,
+//            R.raw.prompt
+//        ).map {
+//            val uri = "android.resource://${context.packageName}/${it}".toUri()
+//            MediaItem.fromUri(uri)
+//        }
+//        exoPlayer.setPauseAtEndOfMediaItems(true)
+//
+//        exoPlayer.setMediaItems(mediaItems, false)
+//        exoPlayer.prepare()
         onDispose {
             exoPlayer.release()
         }
@@ -291,12 +326,14 @@ fun EnhancedVideoPlayer(
             }
         }
 
+
         exoPlayer.addListener(listener)
 
         onDispose {
             exoPlayer.removeListener(listener)
         }
     }
+
     Box(modifier = modifier) {
         AndroidView(
             factory = { ctx ->
@@ -305,6 +342,7 @@ fun EnhancedVideoPlayer(
                     useController = false
                     setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
                     controllerAutoShow = false
+                    setKeepContentOnPlayerReset(true)
                 }
             },
             update = {
@@ -336,7 +374,7 @@ fun EnhancedVideoPlayer(
 }
 
 @Composable
-fun StatusBar(
+private fun StatusBar(
     state: ChatState,
     modifier: Modifier = Modifier
 ) {
@@ -381,7 +419,7 @@ fun StatusBar(
 }
 
 @Composable
-fun StatusIcon(state: ChatState) {
+private fun StatusIcon(state: ChatState) {
     val icon = remember(state) {
         when (state) {
             is ChatState.Idle -> Icons.Rounded.Person
@@ -419,7 +457,7 @@ fun StatusIcon(state: ChatState) {
     )
 }
 
-fun getStatusText(state: ChatState): String {
+private fun getStatusText(state: ChatState): String {
     return when (state) {
         is ChatState.Idle -> "Ready"
         is ChatState.Greeting -> "Greeting..."
@@ -431,7 +469,7 @@ fun getStatusText(state: ChatState): String {
 }
 
 @Composable
-fun EnhancedMicrophonePulse(
+private fun EnhancedMicrophonePulse(
     modifier: Modifier = Modifier
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "pulse")
@@ -502,7 +540,7 @@ fun EnhancedMicrophonePulse(
 }
 
 @Composable
-fun PremiumChatControls(
+private fun PremiumChatControls(
     state: ChatState,
     micPermissionGranted: Boolean,
     onStartChat: () -> Unit,
@@ -598,7 +636,7 @@ fun PremiumChatControls(
 }
 
 @Composable
-fun PremiumButton(
+private fun PremiumButton(
     text: String,
     icon: ImageVector,
     onClick: () -> Unit,
@@ -678,7 +716,7 @@ fun PremiumButton(
     }
 }
 
-fun getControlStatusText(state: ChatState, micPermissionGranted: Boolean): String {
+private fun getControlStatusText(state: ChatState, micPermissionGranted: Boolean): String {
     return when (state) {
         is ChatState.Idle -> {
             if (micPermissionGranted) {
@@ -695,7 +733,7 @@ fun getControlStatusText(state: ChatState, micPermissionGranted: Boolean): Strin
 }
 
 @Composable
-fun PremiumSnackbar(data: SnackbarData) {
+private fun PremiumSnackbar(data: SnackbarData) {
     Snackbar(
         modifier = Modifier.padding(16.dp),
         shape = RoundedCornerShape(16.dp),

@@ -3,6 +3,8 @@ package uz.uzbekai.virtualvideochat.repository
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
@@ -23,8 +25,14 @@ sealed class SpeechResult {
 
 class SpeechRepository(private val context: Context) {
 
-    private var speechRecognizer: SpeechRecognizer? = null
+
     private var isListening = false
+
+    private val speechRecognizer: SpeechRecognizer by lazy {
+        SpeechRecognizer.createSpeechRecognizer(context).apply {
+            setRecognitionListener(recognitionListener)
+        }
+    }
 
     private val _results = MutableStateFlow<SpeechResult>(SpeechResult.Idle)
     val results: StateFlow<SpeechResult> = _results.asStateFlow()
@@ -49,13 +57,22 @@ class SpeechRepository(private val context: Context) {
             return
         }
 
-        speechRecognizer?.destroy()
+        Handler(Looper.getMainLooper()).post {
+            try {
+                speechRecognizer.startListening(createIntent())
+                isListening = true
 
-        speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context).apply {
-            setRecognitionListener(recognitionListener)
+                Log.d(TAG, "Started listening")
+            } catch (e: Exception) {
+                Log.e(TAG, "Start listening failed", e)
+                _results.value = SpeechResult.GeneralError
+            }
         }
 
-        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+    }
+
+    fun createIntent(): Intent {
+        return Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(
                 RecognizerIntent.EXTRA_LANGUAGE_MODEL,
                 RecognizerIntent.LANGUAGE_MODEL_FREE_FORM
@@ -70,41 +87,35 @@ class SpeechRepository(private val context: Context) {
             )
         }
 
-        speechRecognizer?.startListening(intent)
-        isListening = true
-
-        Log.d(TAG, "Started listening")
     }
 
     fun stopListening() {
         if (!isListening) {
             return
         }
-
-        speechRecognizer?.stopListening()
-        isListening = false
-        _results.value = SpeechResult.Idle
-
-        Log.d(TAG, "Stopped listening")
+        Handler(Looper.getMainLooper()).post {
+            speechRecognizer.stopListening()
+            isListening = false
+            Log.d(TAG, "Stopped listening")
+        }
     }
 
     fun cancelListening() {
         if (!isListening) {
             return
         }
-
-        speechRecognizer?.cancel()
-        isListening = false
-        _results.value = SpeechResult.Idle
-
-        Log.d(TAG, "Cancelled listening")
+        Handler(Looper.getMainLooper()).post {
+            speechRecognizer.cancel()
+            isListening = false
+            Log.d(TAG, "Cancelled listening")
+        }
     }
 
     fun destroy() {
-        speechRecognizer?.destroy()
-        speechRecognizer = null
-        isListening = false
-        Log.d(TAG, "Speech recognizer destroyed")
+        Handler(Looper.getMainLooper()).post {
+            speechRecognizer.destroy()
+            Log.d(TAG, "Speech recognizer destroyed")
+        }
     }
 
     private val recognitionListener = object : RecognitionListener {
@@ -176,7 +187,8 @@ class SpeechRepository(private val context: Context) {
         }
 
         override fun onPartialResults(partialResults: Bundle?) {
-            val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+            val matches =
+                partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
 
             if (!matches.isNullOrEmpty()) {
                 val partial = matches[0]

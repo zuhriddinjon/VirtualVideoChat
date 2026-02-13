@@ -13,6 +13,17 @@ sealed class ChatState {
     object Goodbye : ChatState()
 
     data class Error(val message: String) : ChatState()
+
+    override fun toString(): String {
+        return when (this) {
+            Idle -> "Idle"
+            Greeting -> "Greeting"
+            is Listening -> "Listening(promptCount=$promptCount)"
+            is Response -> "Response(videoType=$videoType)"
+            Goodbye -> "Goodbye"
+            is Error -> "Error(message=$message)"
+        }
+    }
 }
 
 fun ChatState.shouldLoop(): Boolean = when (this) {

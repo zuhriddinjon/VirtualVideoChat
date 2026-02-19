@@ -26,6 +26,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val _state = MutableStateFlow<ChatState>(ChatState.Idle)
     val state: StateFlow<ChatState> = _state.asStateFlow()
 
+    private val _speechedText = MutableStateFlow<String>("")
+    val speechedText: StateFlow<String> = _speechedText.asStateFlow()
+
     private val _events = MutableSharedFlow<ChatEvent>()
     val events: SharedFlow<ChatEvent> = _events.asSharedFlow()
 
@@ -111,6 +114,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         cancelSilenceDetection()
 
         android.util.Log.d(TAG, "Nutq tanildi: $transcript")
+        _speechedText.value = transcript
 
         val responseVideo = KeywordMatcher.matchKeywords(transcript)
         val intent = KeywordMatcher.detectIntent(transcript)

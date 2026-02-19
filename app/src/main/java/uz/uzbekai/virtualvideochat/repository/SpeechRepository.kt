@@ -1,5 +1,6 @@
 package uz.uzbekai.virtualvideochat.repository
 
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
@@ -29,7 +30,11 @@ class SpeechRepository(private val context: Context) {
     private var isListening = false
 
     private val speechRecognizer: SpeechRecognizer by lazy {
-        SpeechRecognizer.createSpeechRecognizer(context).apply {
+        val componentName = ComponentName(
+            "com.google.android.googlequicksearchbox",
+            "com.google.android.voicesearch.serviceapi.GoogleRecognitionService"
+        )
+        SpeechRecognizer.createSpeechRecognizer(context, componentName).apply {
             setRecognitionListener(recognitionListener)
         }
     }
@@ -182,7 +187,7 @@ class SpeechRepository(private val context: Context) {
             }
 
             val bestMatch = matches[0]
-            Log.d(TAG, "Final result: $bestMatch")
+            Log.d(TAG, "Final result: ${matches.joinToString()}")
             _results.value = SpeechResult.Success(bestMatch)
         }
 
